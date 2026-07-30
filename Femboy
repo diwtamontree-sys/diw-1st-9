@@ -1,0 +1,210 @@
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local CoreGui = game:GetService("CoreGui")
+
+local LocalPlayer = Players.LocalPlayer
+local Camera = workspace.CurrentCamera
+
+-- ==================== [ ค่าเริ่มต้น ] ====================
+local Settings = {
+	Enabled = true,
+	MAX_DISTANCE = 30, -- ระยะเล็ง (บล็อก)
+	FOV_RADIUS = 150,  -- ขนาดวงกลม (พิกเซล)
+}
+-- =======================================================
+
+-- 1. สร้างวงกลม Drawing API
+local FOVCircle = Drawing.new("Circle")
+FOVCircle.Thickness = 2
+FOVCircle.Color = Color3.fromRGB(255, 255, 255)
+FOVCircle.Filled = false
+FOVCircle.Transparency = 1
+FOVCircle.Visible = Settings.Enabled
+FOVCircle.Radius = Settings.FOV_RADIUS
+
+-- 2. สร้าง UI หน้าต่างเมนู
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "LockOnMenuGui"
+ScreenGui.ResetOnSpawn = false
+
+-- ป้องกัน Error สำหรับ Executor / Studio
+pcall(function()
+	ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+end)
+
+local MainFrame = Instance.new("Frame")
+MainFrame.Name = "MainFrame"
+MainFrame.Size = UDim2.new(0, 220, 0, 190)
+MainFrame.Position = UDim2.new(0.05, 0, 0.3, 0)
+MainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+MainFrame.BorderSizePixel = 0
+MainFrame.Active = true
+MainFrame.Draggable = true -- ลากหน้าต่างไปมาได้
+MainFrame.Parent = ScreenGui
+
+local UICorner = Instance.new("UICorner", MainFrame)
+UICorner.CornerRadius = UDim.new(0, 8)
+
+-- Title
+local Title = Instance.new("TextLabel")
+Title.Size = UDim2.new(1, 0, 0, 35)
+Title.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+Title.Text = "Target Lock-On UI"
+Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+Title.TextSize = 14
+Title.Font = Enum.Font.SourceSansBold
+Title.Parent = MainFrame
+Instance.new("UICorner", Title).CornerRadius = UDim.new(0, 8)
+
+-- ปุ่ม Toggle (เปิด/ปิด)
+local ToggleBtn = Instance.new("TextButton")
+ToggleBtn.Size = UDim2.new(0.9, 0, 0, 30)
+ToggleBtn.Position = UDim2.new(0.05, 0, 0.25, 0)
+ToggleBtn.BackgroundColor3 = Color3.fromRGB(46, 204, 113)
+ToggleBtn.Text = "Status: ENABLED"
+ToggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+ToggleBtn.Font = Enum.Font.SourceSansBold
+ToggleBtn.TextSize = 13
+ToggleBtn.Parent = MainFrame
+Instance.new("UICorner", ToggleBtn).CornerRadius = UDim.new(0, 5)
+
+-- ช่องปรับ FOV Size
+local FOVLabel = Instance.new("TextLabel")
+FOVLabel.Size = UDim2.new(0.5, 0, 0, 30)
+FOVLabel.Position = UDim2.new(0.05, 0, 0.48, 0)
+FOVLabel.BackgroundTransparency = 1
+FOVLabel.Text = "FOV Size:"
+FOVLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+FOVLabel.TextXAlignment = Enum.TextXAlignment.Left
+FOVLabel.Font = Enum.Font.SourceSans
+FOVLabel.TextSize = 14
+FOVLabel.Parent = MainFrame
+
+local FOVInput = Instance.new("TextBox")
+FOVInput.Size = UDim2.new(0.38, 0, 0, 25)
+FOVInput.Position = UDim2.new(0.55, 0, 0.49, 0)
+FOVInput.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+FOVInput.Text = tostring(Settings.FOV_RADIUS)
+FOVInput.TextColor3 = Color3.fromRGB(255, 255, 255)
+FOVInput.Font = Enum.Font.SourceSans
+FOVInput.TextSize = 14
+FOVInput.Parent = MainFrame
+Instance.new("UICorner", FOVInput).CornerRadius = UDim.new(0, 4)
+
+-- ช่องปรับ Distance Range
+local RangeLabel = Instance.new("TextLabel")
+RangeLabel.Size = UDim2.new(0.5, 0, 0, 30)
+RangeLabel.Position = UDim2.new(0.05, 0, 0.68, 0)
+RangeLabel.BackgroundTransparency = 1
+RangeLabel.Text = "Max Range:"
+RangeLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+RangeLabel.TextXAlignment = Enum.TextXAlignment.Left
+RangeLabel.Font = Enum.Font.SourceSans
+RangeLabel.TextSize = 14
+RangeLabel.Parent = MainFrame
+
+local RangeInput = Instance.new("TextBox")
+RangeInput.Size = UDim2.new(0.38, 0, 0, 25)
+RangeInput.Position = UDim2.new(0.55, 0, 0.69, 0)
+RangeInput.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+RangeInput.Text = tostring(Settings.MAX_DISTANCE)
+RangeInput.TextColor3 = Color3.fromRGB(255, 255, 255)
+RangeInput.Font = Enum.Font.SourceSans
+RangeInput.TextSize = 14
+RangeInput.Parent = MainFrame
+Instance.new("UICorner", RangeInput).CornerRadius = UDim.new(0, 4)
+
+-- 3. ระบบควบคุม UI และการอัปเดตค่า
+ToggleBtn.MouseButton1Click:Connect(function()
+	Settings.Enabled = not Settings.Enabled
+	if Settings.Enabled then
+		ToggleBtn.Text = "Status: ENABLED"
+		ToggleBtn.BackgroundColor3 = Color3.fromRGB(46, 204, 113)
+	else
+		ToggleBtn.Text = "Status: DISABLED"
+		ToggleBtn.BackgroundColor3 = Color3.fromRGB(231, 76, 60)
+	end
+end)
+
+FOVInput.FocusLost:Connect(function()
+	local num = tonumber(FOVInput.Text)
+	if num then
+		Settings.FOV_RADIUS = num
+		FOVCircle.Radius = num
+	else
+		FOVInput.Text = tostring(Settings.FOV_RADIUS)
+	end
+end)
+
+RangeInput.FocusLost:Connect(function()
+	local num = tonumber(RangeInput.Text)
+	if num then
+		Settings.MAX_DISTANCE = num
+	else
+		RangeInput.Text = tostring(Settings.MAX_DISTANCE)
+	end
+end)
+
+-- กดปุ่ม RightShift เพื่อซ่อน/แสดง หน้าต่าง UI
+UserInputService.InputBegan:Connect(function(input, gpe)
+	if not gpe and input.KeyCode == Enum.KeyCode.RightShift then
+		MainFrame.Visible = not MainFrame.Visible
+	end
+end)
+
+-- 4. ระบบสแกนหาเป้าหมาย (Lock-on Engine)
+local function GetClosestPlayerInFOV()
+	local closestPlayer = nil
+	local shortestDistanceToCenter = Settings.FOV_RADIUS
+
+	local myCharacter = LocalPlayer.Character
+	if not myCharacter or not myCharacter:FindFirstChild("HumanoidRootPart") then 
+		return nil 
+	end
+	
+	local myPos = myCharacter.HumanoidRootPart.Position
+
+	for _, player in ipairs(Players:GetPlayers()) do
+		if player ~= LocalPlayer then
+			local char = player.Character
+			local targetPart = char and char:FindFirstChild("HumanoidRootPart")
+			local humanoid = char and char:FindFirstChildOfClass("Humanoid")
+
+			if targetPart and humanoid and humanoid.Health > 0 then
+				local distance3D = (targetPart.Position - myPos).Magnitude
+				if distance3D <= Settings.MAX_DISTANCE then
+					local screenPosition, onScreen = Camera:WorldToViewportPoint(targetPart.Position)
+
+					if onScreen then
+						local center = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+						local targetPos2D = Vector2.new(screenPosition.X, screenPosition.Y)
+						local distanceToCenter = (targetPos2D - center).Magnitude
+
+						if distanceToCenter <= Settings.FOV_RADIUS and distanceToCenter < shortestDistanceToCenter then
+							shortestDistanceToCenter = distanceToCenter
+							closestPlayer = targetPart
+						end
+					end
+				end
+			end
+		end
+	end
+
+	return closestPlayer
+end
+
+-- 5. Main Loop
+RunService.RenderStepped:Connect(function()
+	local center = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+	FOVCircle.Position = center
+	FOVCircle.Visible = Settings.Enabled
+
+	if not Settings.Enabled then return end
+
+	local targetPart = GetClosestPlayerInFOV()
+
+	if targetPart then
+		Camera.CFrame = CFrame.lookAt(Camera.CFrame.Position, targetPart.Position)
+	end
+end)
